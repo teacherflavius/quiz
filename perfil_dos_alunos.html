@@ -16,26 +16,32 @@
       margin-top: 14px;
     }
 
-    .student-count-panel {
+    .student-count-panel,
+    .student-filter-panel {
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(129,140,248,0.28);
       border-radius: 18px;
       padding: 20px;
       margin-bottom: 18px;
+      backdrop-filter: blur(12px);
+    }
+
+    .student-count-panel {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      backdrop-filter: blur(12px);
     }
 
-    .student-count-panel h2 {
+    .student-count-panel h2,
+    .student-filter-panel h2 {
       color: #f1f5f9;
       font-size: 18px;
       margin: 0 0 6px;
     }
 
-    .student-count-panel p {
+    .student-count-panel p,
+    .student-filter-panel p {
       color: #94a3b8;
       font-size: 13px;
       line-height: 1.5;
@@ -56,6 +62,34 @@
       font-weight: bold;
       box-shadow: 0 16px 40px rgba(0,0,0,0.18);
       flex-shrink: 0;
+    }
+
+    .student-filter-controls {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .student-filter-label {
+      color: #cbd5e1;
+      font-size: 13px;
+      font-weight: bold;
+    }
+
+    .student-filter-select {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: 13px 14px;
+      color: #f1f5f9;
+      font-size: 15px;
+      font-family: Georgia, serif;
+    }
+
+    .student-filter-select option {
+      color: #0f172a;
     }
 
     .modal-backdrop {
@@ -202,14 +236,29 @@
 
     <div class="student-count-panel">
       <div>
-        <h2>Total de alunos matriculados</h2>
-        <p>Contagem atual de alunos com matrícula ativa no curso.</p>
+        <h2 id="studentCountTitle">Alunos exibidos</h2>
+        <p id="studentCountDescription">Contagem atual conforme o filtro selecionado.</p>
       </div>
       <div id="studentCountNumber" class="student-count-number">0</div>
     </div>
 
+    <div class="student-filter-panel">
+      <h2>Filtrar alunos</h2>
+      <p>Selecione uma categoria para visualizar rapidamente alunos sem turma, matriculados, com disponibilidade informada ou pré-matriculados.</p>
+      <div class="student-filter-controls">
+        <label class="student-filter-label" for="studentStatusFilter">Categoria</label>
+        <select id="studentStatusFilter" class="student-filter-select">
+          <option value="all">Todos os alunos</option>
+          <option value="without_class">Alunos sem turma</option>
+          <option value="enrolled">Alunos matriculados</option>
+          <option value="availability">Disponibilidade dos alunos</option>
+          <option value="pre_enrolled">Alunos pré-matriculados</option>
+        </select>
+      </div>
+    </div>
+
     <div class="panel">
-      <h2>Perfis completos</h2>
+      <h2 id="studentProfilesTitle">Perfis completos</h2>
       <div id="studentProfilesList" class="empty">Carregando perfis...</div>
     </div>
   </div>
@@ -238,7 +287,7 @@
     </div>
   </div>
 
-  <script src="perfil_dos_alunos.js?v=20260429-8"></script>
+  <script src="perfil_dos_alunos.js?v=20260510-1"></script>
   <script src="animated_cards.js?v=20260429-8"></script>
 </body>
 </html>
