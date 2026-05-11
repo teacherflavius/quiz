@@ -29,7 +29,7 @@ function escapeHtml(value) {
 }
 
 function getStudentRefId(student) {
-  return String(student.student_ref_id || student.user_id || student.id || "");
+  return String(student.student_ref_id || student.user_id || student.id || student.invite_id || "");
 }
 
 function getStudentRefType(student) {
@@ -40,16 +40,24 @@ function getStudentMapKey(refType, refId) {
   return String(refType || "user") + ":" + String(refId || "");
 }
 
+function normalizeStatus(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 function isPreEnrolled(student) {
-  return getStudentRefType(student) === "invite" || student.pre_enrollment_status === "pending";
+  const refType = getStudentRefType(student);
+  const status = normalizeStatus(student.pre_enrollment_status || student.status);
+  return refType === "invite" || status === "pending" || status === "pre_matriculado" || status === "pré-matriculado";
 }
 
 function isEnrolledStudent(student) {
+  const status = normalizeStatus(student.pre_enrollment_status || student.status);
   return !isPreEnrolled(student) && (
     student.enrolled === true ||
     student.enrolled === "true" ||
     !!student.user_id ||
-    student.pre_enrollment_status === "completed"
+    status === "completed" ||
+    status === "matriculado"
   );
 }
 
@@ -62,7 +70,7 @@ function isVisibleStudent(student) {
     !!student.user_id ||
     !!student.id ||
     !!student.invite_id ||
-    student.pre_enrollment_status === "pending"
+    normalizeStatus(student.pre_enrollment_status) === "pending"
   );
 }
 
@@ -73,10 +81,28 @@ function hasAvailability(student) {
   });
 }
 
+function getAssignedClasses(student) {
+  const refId = getStudentRefId(student);
+  const refType = getStudentRefType(student);
+  const possibleKeys = [
+    getStudentMapKey(refType, refId),
+    getStudentMapKey("user", student.user_id || refId),
+    getStudentMapKey("invite", student.invite_id || student.id || refId)
+  ];
+
+  const classes = [];
+  possibleKeys.forEach(function (key) {
+    const values = studentClassMap.get(key) || [];
+    values.forEach(function (className) {
+      if (!classes.includes(className)) classes.push(className);
+    });
+  });
+
+  return classes;
+}
+
 function hasAssignedClass(student) {
-  const key = getStudentMapKey(getStudentRefType(student), getStudentRefId(student));
-  const classes = studentClassMap.get(key) || [];
-  return classes.length > 0;
+  return getAssignedClasses(student).length > 0;
 }
 
 function filterStudents(students) {
@@ -177,8 +203,7 @@ function formatCreatedAt(value) {
 }
 
 function getStudentClassNames(student) {
-  const key = getStudentMapKey(getStudentRefType(student), getStudentRefId(student));
-  const classes = studentClassMap.get(key) || [];
+  const classes = getAssignedClasses(student);
   return classes.length ? classes.join(", ") : "Nenhuma turma atribuída";
 }
 
@@ -206,13 +231,18 @@ async function loadStudentClassMap() {
     if (response.error) throw response.error;
 
     (response.data || []).forEach(function (row) {
-      const refId = row.student_ref_id || row.user_id || row.invite_id;
+      const refId = row.student_ref_id || row.user_id || row.invite_id || row.id;
       const refType = row.student_ref_type || (row.user_id ? "user" : "invite");
-      const key = getStudentMapKey(refType, refId);
       const className = classItem.class_name || ("Turma " + classItem.class_number);
-      const current = map.get(key) || [];
-      if (!current.includes(className)) current.push(className);
-      map.set(key, current);
+      [
+        getStudentMapKey(refType, refId),
+        row.user_id ? getStudentMapKey("user", row.user_id) : null,
+        row.invite_id ? getStudentMapKey("invite", row.invite_id) : null
+      ].filter(Boolean).forEach(function (key) {
+        const current = map.get(key) || [];
+        if (!current.includes(className)) current.push(className);
+        map.set(key, current);
+      });
     });
   }
 
@@ -378,6 +408,8 @@ function renderProfileCard(student) {
 function renderFilteredStudents() {
   const list = document.getElementById("studentProfilesList");
   const title = document.getElementById("studentProfilesTitle");
+  if (!list) return;
+
   const metadata = getFilterMetadata();
   const filteredStudents = filterStudents(cachedVisibleStudents);
 
@@ -395,6 +427,15 @@ function renderFilteredStudents() {
   attachActionButtons();
 }
 
+function applyStudentFilter(value) {
+  currentStudentFilter = value || "all";
+  const filterSelect = document.getElementById("studentStatusFilter");
+  if (filterSelect && filterSelect.value !== currentStudentFilter) filterSelect.value = currentStudentFilter;
+  renderFilteredStudents();
+}
+
+window.applyStudentFilter = applyStudentFilter;
+
 async function renderStudentProfiles() {
   const list = document.getElementById("studentProfilesList");
   try {
@@ -403,8 +444,10 @@ async function renderStudentProfiles() {
     renderFilteredStudents();
   } catch (error) {
     updateStudentCount(0);
-    list.className = "error";
-    list.textContent = "Não foi possível carregar os perfis dos alunos: " + (error.message || "erro desconhecido") + ". Execute supabase_pre_matriculas_turmas.sql no Supabase.";
+    if (list) {
+      list.className = "error";
+      list.textContent = "Não foi possível carregar os perfis dos alunos: " + (error.message || "erro desconhecido") + ". Execute supabase_pre_matriculas_turmas.sql no Supabase.";
+    }
   }
 }
 
@@ -413,8 +456,7 @@ function setupFilterEvents() {
   if (!filterSelect) return;
 
   filterSelect.addEventListener("change", function () {
-    currentStudentFilter = filterSelect.value || "all";
-    renderFilteredStudents();
+    applyStudentFilter(filterSelect.value || "all");
   });
 }
 
