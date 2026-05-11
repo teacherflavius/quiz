@@ -2,6 +2,8 @@ let currentProfessorSession = null;
 let teacherClasses = [];
 let studentClassMap = new Map();
 let selectedStudentForClass = null;
+let cachedVisibleStudents = [];
+let currentStudentFilter = "all";
 
 function redirectToLogin() {
   window.location.href = "login.html?next=" + encodeURIComponent("perfil_dos_alunos.html");
@@ -42,6 +44,15 @@ function isPreEnrolled(student) {
   return getStudentRefType(student) === "invite" || student.pre_enrollment_status === "pending";
 }
 
+function isEnrolledStudent(student) {
+  return !isPreEnrolled(student) && (
+    student.enrolled === true ||
+    student.enrolled === "true" ||
+    !!student.user_id ||
+    student.pre_enrollment_status === "completed"
+  );
+}
+
 function isVisibleStudent(student) {
   return (
     student.enrolled === true ||
@@ -55,9 +66,81 @@ function isVisibleStudent(student) {
   );
 }
 
+function hasAvailability(student) {
+  const availability = student.availability || {};
+  return Object.keys(availability).some(function (day) {
+    return Array.isArray(availability[day]) && availability[day].length > 0;
+  });
+}
+
+function hasAssignedClass(student) {
+  const key = getStudentMapKey(getStudentRefType(student), getStudentRefId(student));
+  const classes = studentClassMap.get(key) || [];
+  return classes.length > 0;
+}
+
+function filterStudents(students) {
+  if (currentStudentFilter === "without_class") {
+    return students.filter(function (student) { return !hasAssignedClass(student); });
+  }
+
+  if (currentStudentFilter === "enrolled") {
+    return students.filter(isEnrolledStudent);
+  }
+
+  if (currentStudentFilter === "availability") {
+    return students.filter(hasAvailability);
+  }
+
+  if (currentStudentFilter === "pre_enrolled") {
+    return students.filter(isPreEnrolled);
+  }
+
+  return students;
+}
+
+function getFilterMetadata() {
+  const metadata = {
+    all: {
+      title: "Todos os alunos",
+      heading: "Perfis completos",
+      empty: "Nenhum aluno matriculado ou pré-matriculado encontrado."
+    },
+    without_class: {
+      title: "Alunos sem turma",
+      heading: "Alunos sem turma",
+      empty: "Nenhum aluno sem turma encontrado."
+    },
+    enrolled: {
+      title: "Alunos matriculados",
+      heading: "Alunos matriculados",
+      empty: "Nenhum aluno matriculado encontrado."
+    },
+    availability: {
+      title: "Disponibilidade dos alunos",
+      heading: "Alunos com disponibilidade informada",
+      empty: "Nenhum aluno com disponibilidade informada encontrado."
+    },
+    pre_enrolled: {
+      title: "Alunos pré-matriculados",
+      heading: "Alunos pré-matriculados",
+      empty: "Nenhum aluno pré-matriculado encontrado."
+    }
+  };
+
+  return metadata[currentStudentFilter] || metadata.all;
+}
+
 function updateStudentCount(count) {
   const countEl = document.getElementById("studentCountNumber");
   if (countEl) countEl.textContent = String(count || 0);
+
+  const titleEl = document.getElementById("studentCountTitle");
+  const descriptionEl = document.getElementById("studentCountDescription");
+  const metadata = getFilterMetadata();
+
+  if (titleEl) titleEl.textContent = metadata.title;
+  if (descriptionEl) descriptionEl.textContent = "Contagem atual conforme o filtro selecionado.";
 }
 
 function formatCpf(value) {
@@ -292,25 +375,47 @@ function renderProfileCard(student) {
   '</div>';
 }
 
+function renderFilteredStudents() {
+  const list = document.getElementById("studentProfilesList");
+  const title = document.getElementById("studentProfilesTitle");
+  const metadata = getFilterMetadata();
+  const filteredStudents = filterStudents(cachedVisibleStudents);
+
+  if (title) title.textContent = metadata.heading;
+  updateStudentCount(filteredStudents.length);
+
+  if (!filteredStudents.length) {
+    list.className = "empty";
+    list.textContent = metadata.empty;
+    return;
+  }
+
+  list.className = "";
+  list.innerHTML = filteredStudents.map(renderProfileCard).join("");
+  attachActionButtons();
+}
+
 async function renderStudentProfiles() {
   const list = document.getElementById("studentProfilesList");
   try {
     const students = await loadStudents();
-    const visibleStudents = students.filter(isVisibleStudent);
-    updateStudentCount(visibleStudents.length);
-    if (!visibleStudents.length) {
-      list.className = "empty";
-      list.textContent = "Nenhum aluno matriculado ou pré-matriculado encontrado.";
-      return;
-    }
-    list.className = "";
-    list.innerHTML = visibleStudents.map(renderProfileCard).join("");
-    attachActionButtons();
+    cachedVisibleStudents = students.filter(isVisibleStudent);
+    renderFilteredStudents();
   } catch (error) {
     updateStudentCount(0);
     list.className = "error";
     list.textContent = "Não foi possível carregar os perfis dos alunos: " + (error.message || "erro desconhecido") + ". Execute supabase_pre_matriculas_turmas.sql no Supabase.";
   }
+}
+
+function setupFilterEvents() {
+  const filterSelect = document.getElementById("studentStatusFilter");
+  if (!filterSelect) return;
+
+  filterSelect.addEventListener("change", function () {
+    currentStudentFilter = filterSelect.value || "all";
+    renderFilteredStudents();
+  });
 }
 
 function setupModalEvents() {
@@ -345,6 +450,7 @@ async function guardPage() {
   status.textContent = "Professor autenticado: " + currentProfessorSession.user.email + ".";
   document.body.classList.remove("auth-checking");
   setupModalEvents();
+  setupFilterEvents();
   await loadTeacherClasses();
   await loadStudentClassMap();
   await renderStudentProfiles();
