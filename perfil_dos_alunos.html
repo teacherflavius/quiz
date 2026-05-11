@@ -247,7 +247,7 @@
       <p>Selecione uma categoria para visualizar rapidamente alunos sem turma, matriculados, com disponibilidade informada ou pré-matriculados.</p>
       <div class="student-filter-controls">
         <label class="student-filter-label" for="studentStatusFilter">Categoria</label>
-        <select id="studentStatusFilter" class="student-filter-select">
+        <select id="studentStatusFilter" class="student-filter-select" onchange="if (window.applyStudentFilter) window.applyStudentFilter(this.value);">
           <option value="all">Todos os alunos</option>
           <option value="without_class">Alunos sem turma</option>
           <option value="enrolled">Alunos matriculados</option>
@@ -287,7 +287,7 @@
     </div>
   </div>
 
-  <script src="perfil_dos_alunos.js?v=20260510-1"></script>
+  <script src="perfil_dos_alunos.js?v=20260510-2"></script>
   <script src="animated_cards.js?v=20260429-8"></script>
 </body>
 </html>
